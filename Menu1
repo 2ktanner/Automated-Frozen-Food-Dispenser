@@ -1,0 +1,655 @@
+
+
+
+
+// scl is pin 22, SDA  21
+#include <Wire.h>
+#include <Time.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+//thermostat setup---------------------------------
+const int oneWireBus = 4; //temperature
+// Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(oneWireBus);
+// Pass our oneWire reference to Dallas Temperature sensor 
+DallasTemperature sensors(&oneWire);
+
+
+int ledPin = 2;
+int compressorRelay =5;
+
+
+
+//screen set up--------------------------------------
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -5);
+//-----------------------------------------
+const int buttonPinLeft = 15;
+const int buttonPinRight = 13;
+const int buttonPinDown = 14;
+const int buttonPinSelect =12;
+
+
+int buttonStateLeft = 0; 
+int lastButtonStateLeft = 0;
+int buttonStateRight = 0;
+int lastButtonStateRight = 0;
+int buttonStateDown = 0; 
+int lastButtonStateDown = 0;
+int buttonStateSelect = 0; 
+int lastButtonStateSelect = 0;
+
+int tempPushCounter = 31;
+int feed1Hour = 12;
+int feed1Minute = 15;
+int optionPushCounter = 0;
+int selectPushCounter = 1;
+
+int s=0;
+int h=12;
+int m=30;
+
+double temperatureF = 0;
+
+unsigned long previousMillis = 0;  
+const long interval = 1000; 
+
+bool bPress = false;
+
+
+//-------------------------------------------
+
+
+void setup() {
+  Serial.begin(115200);
+
+  // Start the DS18B20 sensor
+  sensors.begin();
+
+  pinMode(buttonPinLeft, INPUT_PULLUP);
+  pinMode(buttonPinRight, INPUT_PULLUP);
+  pinMode(buttonPinDown, INPUT_PULLUP);
+  pinMode(buttonPinSelect, INPUT_PULLUP);
+
+   //thermostat control
+  pinMode(ledPin, OUTPUT);
+  pinMode(compressorRelay, OUTPUT);
+  digitalWrite(ledPin, LOW);
+  digitalWrite(compressorRelay, LOW);
+
+ if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+  Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+  delay(1000);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println("Velcome ");
+  display.display(); 
+  delay(1000);
+}
+
+void loop()
+
+{
+
+   unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval) {
+   previousMillis = currentMillis;
+   s+=1;
+   
+  }
+
+
+  if (s*10-10==0)
+  {
+  sensors.requestTemperatures(); 
+  temperatureF = sensors.getTempFByIndex(0);  
+  }
+  
+   checkLeft();
+   checkRight();
+   checkDown ();
+   checkSelect();
+   keepTime();
+   getThermostat();
+   compressorControl();
+   displayMenu();
+   testFeed1(s);
+   
+   
+}
+
+void checkLeft()
+{
+  buttonStateLeft = digitalRead(buttonPinLeft);
+  
+  // compare the buttonState to its previous state
+
+  //set left temperature --------------------------------------------------------------------------
+  if (buttonStateLeft != lastButtonStateLeft && optionPushCounter ==2) {
+
+    // if the state has changed, increment the counter
+    if (buttonStateLeft == LOW) {
+
+        bPress = true;
+
+      // if the current state is HIGH then the button went from off to on:
+
+      tempPushCounter++;
+      Serial.println("on");
+      Serial.print("Temperature: ");
+      Serial.println(tempPushCounter);
+
+    } else {
+
+      // if the current state is LOW then the button went from on to off:
+
+      Serial.println("off");
+
+    }
+
+    // Delay a little bit to avoid bouncing
+
+    delay(50);
+
+  }
+// left system hour --------------------------------------------------------------------------
+
+    if (buttonStateLeft != lastButtonStateLeft && optionPushCounter ==3 && selectPushCounter ==1) {
+    if (buttonStateLeft == LOW) {
+        bPress = true;
+        
+      h++;
+      Serial.println("on");
+      Serial.print("System Hour: ");
+      Serial.println(h);
+
+    } 
+    delay(50);
+  }
+
+
+//left system minute------------------------------------------------------------------------------
+
+
+    if (buttonStateLeft != lastButtonStateLeft && optionPushCounter ==3 && selectPushCounter ==2) {
+    if (buttonStateLeft == LOW) {
+        bPress = true;
+        
+      m++;
+      Serial.println("on");
+      Serial.print("System Minute: ");
+      Serial.println(m);
+
+    } 
+    delay(50);
+  }
+
+
+// left feed hour -----------------------------------------------------------------------------
+    if (buttonStateLeft != lastButtonStateLeft && optionPushCounter ==4 && selectPushCounter ==1) {
+    if (buttonStateLeft == LOW) {
+        bPress = true;
+        
+      feed1Hour++;
+      Serial.println("on");
+      Serial.print("Feed 1 Hour: ");
+      Serial.println(feed1Hour);
+
+    } 
+    delay(50);
+  }
+
+// left feed minute ------------------------------------------------------------------------------  
+
+  if (buttonStateLeft != lastButtonStateLeft && optionPushCounter ==4 && selectPushCounter ==2) {
+    if (buttonStateLeft == LOW) {
+        bPress = true;
+        
+      feed1Minute++;
+      Serial.println("on");
+      Serial.print("Feed 1 Minute: ");
+      Serial.println(feed1Minute);
+
+    } 
+    delay(50);
+  }
+ 
+  // save the current state as the last state, for next time through the loop
+
+  lastButtonStateLeft = buttonStateLeft;
+
+}
+
+//-----------------------------------------------------------------------------------
+void checkRight()
+{
+  buttonStateRight = digitalRead(buttonPinRight);
+
+
+//set right temperature------------------------------------------------------------------
+
+  if (buttonStateRight != lastButtonStateRight && optionPushCounter ==2) {
+    if (buttonStateRight == LOW) {
+        bPress = true;
+        
+      tempPushCounter--;
+      Serial.println("on");
+      Serial.print("Temperature: ");
+      Serial.println(tempPushCounter);
+
+    } 
+    delay(50);
+  }
+
+//right system hour-----------------------------------------------------------------------
+
+  if (buttonStateRight != lastButtonStateRight && optionPushCounter ==3 && selectPushCounter ==1) {
+    if (buttonStateRight == LOW) {
+        bPress = true;
+        
+      h--;
+      Serial.println("on");
+      Serial.print("System Hour: ");
+      Serial.println(h);
+
+    } 
+    delay(50);
+  }    
+
+//right system minute-----------------------------------------------------------------------
+  if (buttonStateRight != lastButtonStateRight && optionPushCounter ==3 && selectPushCounter ==2) {
+    if (buttonStateRight == LOW) {
+        bPress = true;
+        
+      m--;
+      Serial.println("on");
+      Serial.print("System minute: ");
+      Serial.println(m);
+
+    } 
+    delay(50);
+  }    
+
+
+
+//right feed hour-------------------------------------------------------------------------
+
+  if (buttonStateRight != lastButtonStateRight && optionPushCounter ==4 && selectPushCounter ==1) {
+    if (buttonStateRight == LOW) {
+        bPress = true;
+        
+      feed1Hour--;
+      Serial.println("on");
+      Serial.print("Feed 1 Hour: ");
+      Serial.println(feed1Hour);
+
+    } 
+    delay(50);
+  }    
+
+//right feed minute------------------------------------------------------------------------
+
+    if (buttonStateRight != lastButtonStateRight && optionPushCounter ==4 && selectPushCounter ==2) {
+    if (buttonStateRight == LOW) {
+        bPress = true;
+        
+      feed1Minute--;
+      Serial.println("on");
+      Serial.print("Feed 1 Minute: ");
+      Serial.println(feed1Minute);
+
+    } 
+    delay(50);
+  }    
+
+
+  
+  lastButtonStateRight = buttonStateRight;
+}
+
+
+//------------------------------------------------------------------------------------
+void checkDown()
+{
+  buttonStateDown = digitalRead(buttonPinDown);
+
+  if (buttonStateDown != lastButtonStateDown) {
+    if (buttonStateDown == LOW) {
+        bPress = true;
+        
+      optionPushCounter++;
+
+      if (optionPushCounter >=5){
+          optionPushCounter =1;
+      }
+      Serial.println("down button pressed");
+      Serial.print("number of button pushes: ");
+      Serial.println(optionPushCounter);
+
+    } 
+
+    delay(50);
+
+  }
+  lastButtonStateDown = buttonStateDown;
+}
+
+//--------------------------------------------
+void checkSelect()
+{
+  buttonStateSelect = digitalRead(buttonPinSelect);
+
+  if (buttonStateSelect != lastButtonStateSelect) {
+    if (buttonStateSelect == LOW) {
+        bPress = true;
+        
+      selectPushCounter++;
+
+      if (selectPushCounter >2){
+          selectPushCounter =1;
+      }
+      Serial.println("select button pressed");
+      Serial.print("number of select pushes: ");
+      Serial.println(selectPushCounter);
+
+    } 
+
+    delay(50);
+
+  }
+  lastButtonStateSelect = buttonStateSelect;
+}
+
+//--------------------------------------------
+void keepTime(){
+  
+  if(s>=60){ s=s-60; m +=1;}
+  
+  if(m==60){ m=0; h +=1;}
+  if(h==24){h=1;}
+
+  
+  if(feed1Minute==60){ feed1Minute=0; feed1Hour +=1;}
+  if (feed1Minute<=0) {feed1Minute=0;}
+  if(feed1Hour==24){feed1Hour=1;}
+  
+
+}
+
+
+//--------------------------------------------
+
+void getThermostat(){
+if (s*10-10==0)
+  {
+  sensors.requestTemperatures(); 
+  temperatureF = sensors.getTempFByIndex(0);  
+  }
+// if(s/10==0)
+ //{sensors.requestTemperatures(); 
+// float temperatureF = sensors.getTempFByIndex(0);}   // get temperature every 10 seconds
+  
+}
+//--------------------------------------------
+
+
+void compressorControl(){
+
+if (temperatureF >= 88)
+  {
+    //Serial.println("compressor on");
+    digitalWrite(ledPin, HIGH);
+    //digitalWrite(compressorRelay, HIGH);
+  }
+
+else if (temperatureF <= 87)
+  {
+    //Serial.println("compressor off");
+    //digitalWrite(ledPin, LOW);
+    //digitalWrite(compressorRelay, LOW);
+  }
+
+}
+
+
+/*
+void testFeed1(int s){
+
+ //fill pump on
+if (m == feed1Minute && s%10 <=6 && s<=6 )
+  {
+  digitalWrite(ledPin, HIGH);
+  digitalWrite(compressorRelay, LOW);
+  }  
+ 
+else
+  {
+  digitalWrite(ledPin, LOW);
+  digitalWrite(compressorRelay, HIGH);
+  }
+  
+}
+*/
+
+void testFeed1(int s){
+
+ //fill pump on
+if (tempPushCounter == 32)
+  {
+  digitalWrite(ledPin, HIGH);
+  digitalWrite(compressorRelay, LOW);
+  }  
+ 
+else
+  {
+  digitalWrite(ledPin, LOW);
+  digitalWrite(compressorRelay, HIGH);
+  }
+  
+}
+
+
+
+
+void displayMenu(){
+
+
+  
+
+  //display time
+  display.clearDisplay();
+  display.setCursor(0,1);
+  display.print(int(h/10));
+  display.print(h%10);
+  display.print(":"); 
+  display.print(int(m/10));
+  display.print(m%10);
+  display.print(":");
+  display.print(int(s/10));
+  display.print(s%10);
+  
+  display.setCursor(80,1);
+  display.print(temperatureF);
+  display.setCursor(120,0);
+  display.print("F");
+  display.setTextSize(1);
+
+  
+  
+  // button conditions
+
+// new menu----------------------------------------------
+
+if
+  (optionPushCounter == 1){
+ 
+  display.setCursor(15, 20);
+  display.print(">Manual:");
+ 
+  
+  display.setCursor(15, 30);
+  display.print("Sys Temp:");
+  display.setCursor(75, 30);
+  display.print(tempPushCounter);
+
+  display.setCursor(15, 40);
+  display.print("Set Time:");
+  display.setCursor(75, 40);
+  display.print(int(h/10));
+  display.print(h%10);
+  display.setCursor(85, 40);
+  display.print(":");
+  display.setCursor(90, 40);
+  display.print(int(m/10));
+  display.print(m%10);
+
+  display.setCursor(15, 50);
+  display.print("Feed 1:");
+  display.setCursor(75, 50);
+  display.print(int(feed1Hour/10));
+  display.print(feed1Hour%10);
+  display.setCursor(85, 50);
+  display.print(":");
+  display.setCursor(90, 50);
+  display.print(int(feed1Minute/10));
+  display.print(feed1Minute%10);
+
+  
+
+  }
+
+  if
+  (optionPushCounter == 2){
+ 
+  display.setCursor(15, 20);
+  display.print("Manual:");
+ 
+  
+  display.setCursor(15, 30);
+  display.print(">Sys Temp:");
+  display.setCursor(75, 30);
+  display.print(tempPushCounter);
+
+  display.setCursor(15, 40);
+  display.print("Set Time:");
+  display.setCursor(75, 40);
+  display.print(int(h/10));
+  display.print(h%10);
+  display.setCursor(85, 40);
+  display.print(":");
+  display.setCursor(90, 40);
+  display.print(int(m/10));
+  display.print(m%10);
+
+  display.setCursor(15, 50);
+  display.print("Feed 1:");
+  display.setCursor(75, 50);
+  display.print(int(feed1Hour/10));
+  display.print(feed1Hour%10);
+  display.setCursor(85, 50);
+  display.print(":");
+  display.setCursor(90, 50);
+  display.print(int(feed1Minute/10));
+  display.print(feed1Minute%10);
+  
+
+  
+
+  }
+
+if
+  (optionPushCounter == 3){
+ 
+  display.setCursor(15, 20);
+  display.print("Manual:");
+ 
+  
+  display.setCursor(15, 30);
+  display.print("Sys Temp:");
+  display.setCursor(75, 30);
+  display.print(tempPushCounter);
+
+  display.setCursor(15, 40);
+  display.print(">Set Time:");
+  display.setCursor(75, 40);
+  display.print(int(h/10));
+  display.print(h%10);
+  display.setCursor(85, 40);
+  display.print(":");
+  display.setCursor(90, 40);
+  display.print(int(m/10));
+  display.print(m%10);
+
+  display.setCursor(15, 50);
+  display.print("Feed 1:");
+  display.setCursor(75, 50);
+  display.print(int(feed1Hour/10));
+  display.print(feed1Hour%10);
+  display.setCursor(85, 50);
+  display.print(":");
+  display.setCursor(90, 50);
+  display.print(int(feed1Minute/10));
+  display.print(feed1Minute%10);
+  
+  
+  
+
+  }
+
+  if
+  (optionPushCounter == 4){
+ 
+  display.setCursor(15, 20);
+  display.print("Manual:");
+ 
+  
+  display.setCursor(15, 30);
+  display.print("Sys Temp:");
+  display.setCursor(75, 30);
+  display.print(tempPushCounter);
+
+  display.setCursor(15, 40);
+  display.print("Set Time:");
+  display.setCursor(75, 40);
+  display.print(int(h/10));
+  display.print(h%10);
+  display.setCursor(85, 40);
+  display.print(":");
+  display.setCursor(90, 40);
+  display.print(int(m/10));
+  display.print(m%10);
+
+  display.setCursor(15, 50);
+  display.print(">Feed 1:");
+  display.setCursor(75, 50);
+  display.print(int(feed1Hour/10));
+  display.print(feed1Hour%10);
+  display.setCursor(85, 50);
+  display.print(":");
+  display.setCursor(90, 50);
+  display.print(int(feed1Minute/10));
+  display.print(feed1Minute%10);
+  
+  
+  
+  
+
+  }
+  
+  display.display();
+
+
+
+
+}
